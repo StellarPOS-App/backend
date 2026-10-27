@@ -173,3 +173,5 @@ See [CONTRIBUTING.md](CONTRIBUTING.md). Security reports go through
 ## License
 
 [MIT](LICENSE)
+
+## Payment Module Test Coverage\n\nThe payment module must reach at least 80% line coverage. Critical paths including payment creation, Stellar submission, status polling, and refund processing must each have both happy-path and error-path tests.
