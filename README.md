@@ -173,3 +173,5 @@ See [CONTRIBUTING.md](CONTRIBUTING.md). Security reports go through
 ## License
 
 [MIT](LICENSE)
+
+## Dead-Letter Queue Handling\n\nFailed async jobs must be routed to a dead-letter queue after a configurable number of retries. Without DLQ handling, failed jobs silently disappear, causing payment status to get stuck without operator visibility.
