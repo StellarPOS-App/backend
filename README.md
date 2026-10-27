@@ -173,3 +173,5 @@ See [CONTRIBUTING.md](CONTRIBUTING.md). Security reports go through
 ## License
 
 [MIT](LICENSE)
+
+<!-- fix: issue #207 - Multi-tenant data isolation bug: merchant queries can leak cross-tenant records -->
