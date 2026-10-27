@@ -173,3 +173,5 @@ See [CONTRIBUTING.md](CONTRIBUTING.md). Security reports go through
 ## License
 
 [MIT](LICENSE)
+
+## Multi-Tenant Data Isolation\n\nAll database queries must scope results by merchant ID derived from the authenticated JWT, never from a request body parameter. A missing tenant scope filter allows one merchant to read or modify another's data.
