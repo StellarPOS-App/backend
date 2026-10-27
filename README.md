@@ -173,3 +173,5 @@ See [CONTRIBUTING.md](CONTRIBUTING.md). Security reports go through
 ## License
 
 [MIT](LICENSE)
+
+## Webhook Integration Guide\n\nMerchants integrating via webhooks need documentation covering event types, payload schemas, signature verification, retry behaviour, and idempotency requirements. Missing docs lead to insecure webhook implementations.
