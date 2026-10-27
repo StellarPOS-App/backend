@@ -173,3 +173,5 @@ See [CONTRIBUTING.md](CONTRIBUTING.md). Security reports go through
 ## License
 
 [MIT](LICENSE)
+
+## GDPR Data Deletion Endpoint\n\nA DELETE /merchants/:id/data endpoint must be implemented to fully purge all personal data for a merchant on request. Without it, the platform cannot comply with GDPR right-to-erasure requests.
