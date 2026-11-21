@@ -54,7 +54,8 @@ whole numbers, or the server refuses to start.
 
 | Variable | Default | Description |
 |---|---|---|
-| `STELLAR_NETWORK` | `testnet` | `testnet` or `mainnet`. Any other value is treated as `testnet`. |
+| `STELLAR_NETWORK` | `testnet` | `testnet` or `mainnet`. Any other value stops start-up with an error. |
+| `STELLAR_NETWORK_PASSPHRASE` | Passphrase for `STELLAR_NETWORK` | Must match `STELLAR_NETWORK`: `Test SDF Network ; September 2015` on testnet, `Public Global Stellar Network ; September 2015` on mainnet. Start-up stops on a mismatch. |
 | `STELLAR_HORIZON_URL` | `https://horizon-testnet.stellar.org` on testnet, `https://horizon.stellar.org` on mainnet | Horizon API the backend reads from. Keep it on the same network as `STELLAR_NETWORK`. |
 | `STELLAR_MERCHANT_PUBLIC_KEY` | empty | Public key (`G...`) that receives customer payments. Stellar checkout is disabled while it is empty. Never put a secret key (`S...`) here. The backend only watches this account and never signs for it. |
 | `STELLAR_ASSET_CODE` | `XLM` | Asset customers pay in, for example `USDC`. |

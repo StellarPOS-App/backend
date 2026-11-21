@@ -17,6 +17,9 @@ export { app };
 export const server = createServer(app);
 
 async function start(): Promise<void> {
+  logger.info(
+    `Stellar network: ${config.stellar.network} (Horizon ${config.stellar.horizonUrl})`,
+  );
   await connectDatabase();
   await connectRedis();
   setupQueues();

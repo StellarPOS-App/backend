@@ -1,4 +1,9 @@
 import 'dotenv/config';
+import {
+  assertStellarNetworkSettings,
+  parseStellarNetwork,
+  STELLAR_NETWORKS,
+} from '@/config/stellarNetwork';
 
 type Env = 'development' | 'production' | 'test';
 
@@ -24,7 +29,8 @@ function bool(name: string, fallback: boolean): boolean {
 }
 
 const env = str('NODE_ENV', 'development') as Env;
-const network = str('STELLAR_NETWORK', 'testnet') === 'mainnet' ? 'mainnet' : 'testnet';
+// A typo such as "mainnnet" must stop start-up, not silently select testnet.
+const network = parseStellarNetwork(str('STELLAR_NETWORK', 'testnet'));
 
 export const config = {
   env,
@@ -70,10 +76,8 @@ export const config = {
       'STELLAR_HORIZON_URL',
       network === 'mainnet' ? 'https://horizon.stellar.org' : 'https://horizon-testnet.stellar.org',
     ),
-    networkPassphrase:
-      network === 'mainnet'
-        ? 'Public Global Stellar Network ; September 2015'
-        : 'Test SDF Network ; September 2015',
+    // Checked against `network` at start-up (see assertStellarNetworkSettings).
+    networkPassphrase: str('STELLAR_NETWORK_PASSPHRASE', STELLAR_NETWORKS[network].passphrase),
     merchantPublicKey: str('STELLAR_MERCHANT_PUBLIC_KEY', ''),
     asset: {
       code: str('STELLAR_ASSET_CODE', 'XLM'),
@@ -114,6 +118,11 @@ if (config.email.provider === 'resend' && !config.email.apiKey) {
 if (config.store.taxRateBps < 0 || config.store.taxRateBps > 10_000) {
   throw new Error('TAX_RATE_BPS must be between 0 and 10000');
 }
+assertStellarNetworkSettings({
+  network: config.stellar.network,
+  horizonUrl: config.stellar.horizonUrl,
+  networkPassphrase: config.stellar.networkPassphrase,
+});
 if (config.health.timeoutMs <= 0) {
   throw new Error('HEALTH_CHECK_TIMEOUT_MS must be greater than 0');
 }
