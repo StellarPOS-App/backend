@@ -73,6 +73,16 @@ export function createApp(): express.Express {
     );
   }
 
+  // CDN redirect for static documentation and image assets (#160).
+  // In production, set CDN_URL to your CDN origin (e.g. https://cdn.example.com).
+  // The server 302-redirects /docs/* and /static/* to the CDN so Node.js does
+  // not spend CPU streaming bytes that a CDN can serve at the edge.
+  if (config.cdn.url) {
+    app.use(['/docs', '/static'], (req, res) => {
+      res.redirect(302, `${config.cdn.url}${req.path}`);
+    });
+  }
+
   app.get('/health', (_req, res) => {
     const database = isDatabaseHealthy() ? 'up' : 'down';
     // Load balancers take a 503 as "send traffic elsewhere".

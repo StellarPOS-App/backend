@@ -65,6 +65,11 @@ CREATE INDEX IF NOT EXISTS idx_transactions_status ON transactions(status);
 -- Analytics filter completed sales by date; customer pages list a customer's sales.
 CREATE INDEX IF NOT EXISTS idx_transactions_status_created ON transactions(status, created_at);
 CREATE INDEX IF NOT EXISTS idx_transactions_customer ON transactions(customer_id, created_at);
+-- Partial index for non-terminal statuses (#157). Dashboard and background jobs
+-- that poll for pending orders only ever scan this small working set; a full-status
+-- index includes every historical completed/voided row unnecessarily.
+CREATE INDEX IF NOT EXISTS idx_transactions_pending ON transactions(created_at)
+  WHERE status = 'pending';
 -- PERF-016: dashboard and reporting queries filter by merchant (user_id), status, and date range
 -- together; without this composite index each predicate is applied sequentially on a full scan.
 CREATE INDEX IF NOT EXISTS idx_transactions_user_status_created ON transactions(user_id, status, created_at);

@@ -64,6 +64,17 @@ export const config = {
     currency: str('STORE_CURRENCY', 'USD').toUpperCase(),
     taxRateBps: int('TAX_RATE_BPS', 0),
   },
+  // Static asset CDN (#160). When set, the server redirects /docs/* and
+  // /static/* requests to CDN_URL instead of serving them from Node.js.
+  // Leave empty in development to serve files locally.
+  cdn: {
+    url: str('CDN_URL', ''),
+  },
+  // Redis URL for session / cache store (#159). Required in production when
+  // horizontal scaling is needed; unused in single-node development/test.
+  redis: {
+    url: str('REDIS_URL', ''),
+  },
   stellar: {
     network,
     horizonUrl: str(
