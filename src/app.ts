@@ -12,6 +12,7 @@ import { responseTime } from '@/middleware/responseTime.middleware';
 import { notFoundHandler } from '@/middleware/notFound.middleware';
 import { DEFAULT_ROLE_LIMITS, roleRateLimit } from '@/middleware/rateLimit.middleware';
 import analyticsRoutes from '@/routes/analytics.routes';
+import reportRoutes from '@/routes/reports.routes';
 import merchantRoutes from '@/routes/merchant.routes';
 import orderRoutes from '@/routes/orders.routes';
 import withdrawalRoutes from '@/routes/withdrawals.routes';
@@ -164,6 +165,7 @@ export function createApp(): express.Express {
   app.use('/api/v1/transactions', transactionRoutes);
   app.use('/api/v1/payments', paymentRoutes);
   app.use('/api/v1/analytics', analyticsRoutes);
+  app.use('/api/v1/reports', reportRoutes);
   app.use('/api/v1/search', searchRoutes);
   app.use('/api/v1/webhooks', webhookRoutes);
   app.use('/api/v1/audit', auditRoutes);

@@ -64,6 +64,8 @@ CREATE TABLE IF NOT EXISTS transactions (
   completed_at TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_transactions_created ON transactions(created_at);
+-- Streaming CSV exports page by (created_at, id) keyset cursors.
+CREATE INDEX IF NOT EXISTS idx_transactions_created_id ON transactions(created_at DESC, id DESC);
 CREATE INDEX IF NOT EXISTS idx_transactions_status ON transactions(status);
 -- Analytics filter completed sales by date; customer pages list a customer's sales.
 CREATE INDEX IF NOT EXISTS idx_transactions_status_created ON transactions(status, created_at);
@@ -105,6 +107,7 @@ CREATE TABLE IF NOT EXISTS payments (
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_payments_tx ON payments(transaction_id);
+CREATE INDEX IF NOT EXISTS idx_payments_created_id ON payments(created_at DESC, id DESC);
 
 CREATE TABLE IF NOT EXISTS payment_requests (
   id TEXT PRIMARY KEY,

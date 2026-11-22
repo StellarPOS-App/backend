@@ -1,4 +1,12 @@
-import { centsToAssetAmount, fromStroops, taxCents, toStroops } from '@/utils/money';
+import {
+  centsToAssetAmount,
+  feeCents,
+  feeForAmount,
+  feeStroops,
+  fromStroops,
+  taxCents,
+  toStroops,
+} from '@/utils/money';
 
 describe('money', () => {
   it('round-trips Stellar amounts through stroops', () => {
@@ -28,5 +36,25 @@ describe('money', () => {
     expect(taxCents(1000, 750)).toBe(75);
     expect(taxCents(10, 750)).toBe(1); // 0.75 -> 1
     expect(taxCents(6, 750)).toBe(0); // 0.45 -> 0
+  });
+
+  it('computes transaction fees with integer stroop arithmetic', () => {
+    // 2.5% of 10.0000000 is exactly 0.2500000 — never 0.24999999.
+    expect(feeForAmount('10.0000000', 250)).toBe(2_500_000n);
+    expect(fromStroops(feeForAmount('10.0000000', 250))).toBe('0.2500000');
+    expect(feeStroops(toStroops('1.0000000'), 250)).toBe(250_000n);
+    // Half up, entirely in bigint: 0.5 stroop rounds to 1.
+    expect(feeStroops(1n, 5_000)).toBe(1n);
+    expect(feeStroops(1n, 4_999)).toBe(0n);
+    expect(feeStroops(toStroops('0.0000001'), 100)).toBe(0n);
+  });
+
+  it('computes cent fees without floating point and validates rates', () => {
+    expect(feeCents(1_000, 250)).toBe(25); // $10.00 at 2.5%
+    expect(feeCents(10, 250)).toBe(0);
+    expect(feeCents(1, 5_000)).toBe(1); // half a cent rounds up
+    expect(() => feeCents(1_000, 10_001)).toThrow();
+    expect(() => feeStroops(1n, -1)).toThrow();
+    expect(() => feeStroops(1n, 1.5)).toThrow();
   });
 });

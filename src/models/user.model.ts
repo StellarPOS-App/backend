@@ -25,6 +25,7 @@ export interface User {
   email: string;
   passwordHash: string;
   role: Role;
+  active: number;
   kycStatus: KycStatus;
   active: boolean;
   createdAt: string;
@@ -38,6 +39,7 @@ const toUser = (r: UserRow): User => ({
   email: r.email,
   passwordHash: r.password_hash,
   role: r.role,
+  active: r.active,
   kycStatus: r.kyc_status ?? 'pending',
   active: r.active !== 0,
   createdAt: r.created_at,

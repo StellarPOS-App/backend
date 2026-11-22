@@ -69,6 +69,9 @@ export const config = {
     name: str('STORE_NAME', 'StellarPOS Store'),
     currency: str('STORE_CURRENCY', 'USD').toUpperCase(),
     taxRateBps: int('TAX_RATE_BPS', 0),
+    // Processing fee in basis points (250 = 2.5%). Always applied with
+    // integer arithmetic in stroops/cents — never through a JS float.
+    feeRateBps: int('FEE_RATE_BPS', 0),
   },
   // Static asset CDN (#160). When set, the server redirects /docs/* and
   // /static/* requests to CDN_URL instead of serving them from Node.js.
@@ -128,6 +131,9 @@ if (config.email.provider === 'resend' && !config.email.apiKey) {
 }
 if (config.store.taxRateBps < 0 || config.store.taxRateBps > 10_000) {
   throw new Error('TAX_RATE_BPS must be between 0 and 10000');
+}
+if (config.store.feeRateBps < 0 || config.store.feeRateBps > 10_000) {
+  throw new Error('FEE_RATE_BPS must be between 0 and 10000');
 }
 assertStellarNetworkSettings({
   network: config.stellar.network,

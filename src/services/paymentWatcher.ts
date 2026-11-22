@@ -5,8 +5,9 @@
  * picks up where it left off and never double-processes a payment.
  */
 import { config } from '@/config/config';
-import { expireStaleRequests, handleIncomingPayment } from '@/services/checkout.service';
+import { expireStaleRequests } from '@/services/checkout.service';
 import * as horizon from '@/services/horizon';
+import { dispatchPaymentConfirmation } from '@/services/paymentConfirmation';
 import { getDb } from '@/utils/database';
 import { logger } from '@/utils/logger';
 
@@ -47,7 +48,9 @@ export async function pollOnce(account: string, retries = 3): Promise<number> {
   }
   let settled = 0;
   for (const payment of page.payments) {
-    if (await handleIncomingPayment(payment)) settled++;
+    // Each confirmation is queued independently. Retries and the dead-letter
+    // queue live in MemoryQueue, so one flaky Horizon call cannot strand a sale.
+    if (await dispatchPaymentConfirmation(payment)) settled++;
   }
   if (page.cursor !== cursor) writeCursor(page.cursor);
   expireStaleRequests();

@@ -42,3 +42,42 @@ export function centsToAssetAmount(cents: number, rate: string): string {
 export function taxCents(amountCents: number, rateBps: number): number {
   return Math.floor((amountCents * rateBps + 5_000) / 10_000);
 }
+
+/** Basis points: 10,000 bps = 100%. */
+const BPS = 10_000n;
+
+function assertBps(rateBps: number): void {
+  if (!Number.isInteger(rateBps) || rateBps < 0 || rateBps > 10_000) {
+    throw new Error(`Rate must be an integer between 0 and 10000 basis points, got ${rateBps}`);
+  }
+}
+
+/**
+ * Processing fee in stroops for an amount already expressed in stroops.
+ *
+ * Everything is BigInt: the amount never becomes a JS number, so a 2.5% fee
+ * (250 bps) on 10.0000000 units is exactly 2500000 stroops (0.2500000), not
+ * 0.24999999. Rounding is half up, in the integer domain.
+ */
+export function feeStroops(amountStroops: bigint, rateBps: number): bigint {
+  assertBps(rateBps);
+  if (typeof amountStroops !== 'bigint' || amountStroops < 0n) {
+    throw new Error('amountStroops must be a non-negative bigint');
+  }
+  return (amountStroops * BigInt(rateBps) + BPS / 2n) / BPS;
+}
+
+/** Fee in stroops for a 7-decimal Stellar amount string. */
+export function feeForAmount(amount: string, rateBps: number): bigint {
+  return feeStroops(toStroops(amount), rateBps);
+}
+
+/** Fee in integer cents (half up). No floats touch the amount. */
+export function feeCents(amountCents: number, rateBps: number): number {
+  assertBps(rateBps);
+  if (!Number.isSafeInteger(amountCents) || amountCents < 0) {
+    throw new Error('amountCents must be a non-negative safe integer');
+  }
+  // BigInt inside as well: even a large sale cannot lose precision mid-product.
+  return Number((BigInt(amountCents) * BigInt(rateBps) + BPS / 2n) / BPS);
+}

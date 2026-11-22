@@ -206,6 +206,22 @@ Status runs `pending`, then `paid`, `expired` or `cancelled`. See
 
 All analytics routes need a token. Only `completed` sales are counted.
 
+## Reports (admin / manager)
+
+| Method | Path | Notes |
+|---|---|---|
+| GET | `/reports/export?type=transactions` | Streams a CSV of all transactions, including the integer `processing_fee_cents` column |
+| GET | `/reports/export?type=payments` | Streams a CSV of all payments |
+
+The response is streamed in keyset-cursor batches (`?batchSize=500`, max 1000;
+`?limit=` is accepted as an alias), so memory use stays flat for exports well
+beyond 10,000 rows. Use `?cursor=<opaque>` to resume a partially downloaded
+export. A failure after headers are sent is reported as an in-band CSV line
+starting with `# export failed` instead of leaving the client to time out.
+All reports use the same cursor format; pass no cursor to start from the newest
+row. String cells starting with `=`, `+`, `-` or `@` are prefixed with an
+apostrophe to prevent spreadsheet formula injection.
+
 ## Real-time (Socket.IO)
 
 Connect to the API origin with `io(url, { auth: { token } })`. All terminals
@@ -223,8 +239,12 @@ share one room.
 
 | Method | Path | Role | Notes |
 |---|---|---|---|
-| GET | `/queues/dead-letters` | admin | Optional `?queue=notifications\|receipts` |
+| GET | `/queues/dead-letters` | admin | Optional `?queue=notifications\|receipts\|payments` |
 | POST | `/queues/dead-letters/:id/requeue` | admin | 404 if the id is unknown |
 
 Each entry: `{ id, queue, data, error, stack?, attempts, failedAt }`. The list is in-memory,
 newest first, capped at 100 per queue, and cleared on restart.
+
+The `payments` queue handles Stellar payment confirmations: it retries a failed
+confirmation three times (four attempts total, 1s/2s/4s backoff) before moving
+it here for manual review. Requeueing a dead-letter job gives it a fresh budget.

@@ -44,6 +44,10 @@ router.post(
           })
         : checkout.recordOfflinePayment({ ...body, method: body.method });
 
+    if (idempotencyKey) {
+      idempotencyStore.set(idempotencyKey, { result, timestamp: Date.now() });
+    }
+    return sendSuccess(res, result, 201);
     sendSuccess(res, result, 201);
   }),
 );

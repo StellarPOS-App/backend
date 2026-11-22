@@ -2,6 +2,7 @@ import { createServer } from 'node:http';
 import { app } from '@/app';
 import { config } from '@/config/config';
 import { attachRealtime, closeRealtime } from '@/services/realtime';
+import { startPaymentConfirmationWorker } from '@/services/paymentConfirmation';
 import { startPaymentWatcher, stopPaymentWatcher } from '@/services/paymentWatcher';
 import { startBackupSchedule, stopBackupSchedule } from '@/utils/backup';
 import { closeDatabase, connectDatabase } from '@/utils/database';
@@ -24,6 +25,7 @@ async function start(): Promise<void> {
   await connectRedis();
   setupQueues();
   startEmailWorker();
+  startPaymentConfirmationWorker();
   attachRealtime(server);
   startPaymentWatcher();
   startBackupSchedule();

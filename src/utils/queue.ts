@@ -193,13 +193,37 @@ export class MemoryQueue<T = unknown> {
   }
 }
 
-export const QUEUE_NAMES = ['notifications', 'receipts'] as const;
+export const QUEUE_NAMES = ['notifications', 'receipts', 'payments'] as const;
 export type QueueName = (typeof QUEUE_NAMES)[number];
+
+/**
+ * Payment confirmations get one initial try plus three retries before they are
+ * moved to the dead-letter list for manual review. A confirmation that fails
+ * must never be silently dropped — that would leave a customer's sale stuck in
+ * `pending` forever.
+ */
+export const PAYMENT_CONFIRMATION_ATTEMPTS = 4;
+export const PAYMENT_CONFIRMATION_BACKOFF_MS = 1_000;
+
+/** Per-queue overrides of the generic defaults. */
+const QUEUE_DEFAULTS: Partial<Record<QueueName, Required<JobOptions>>> = {
+  payments: {
+    attempts: PAYMENT_CONFIRMATION_ATTEMPTS,
+    backoffMs: PAYMENT_CONFIRMATION_BACKOFF_MS,
+  },
+};
 
 let queues: Map<QueueName, MemoryQueue> | null = null;
 
 export function setupQueues(): void {
-  queues = new Map(QUEUE_NAMES.map((name) => [name, new MemoryQueue(name)]));
+  queues = new Map(
+    QUEUE_NAMES.map((name) => [name, new MemoryQueue(name, QUEUE_DEFAULTS[name] ?? DEFAULTS)]),
+  );
+}
+
+/** True once setupQueues() has run (scripts and unit tests may skip it). */
+export function queuesReady(): boolean {
+  return queues !== null;
 }
 
 export function getQueue<T = unknown>(name: QueueName): MemoryQueue<T> {
