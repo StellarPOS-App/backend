@@ -55,6 +55,28 @@ export const config = {
     apiKey: str('EMAIL_API_KEY', ''),
     from: str('EMAIL_FROM', 'StellarPOS <receipts@example.com>'),
   },
+  exchangeRate: {
+    // Optional FX provider. An empty URL keeps checkouts working offline by
+    // falling back to STELLAR_ASSET_RATE. Every successful lookup (live or
+    // fallback) is served from Redis for cacheTtlSeconds before refetching,
+    // so burst traffic never hammers the external API.
+    apiUrl: str('EXCHANGE_RATE_API_URL', ''),
+    apiKey: str('EXCHANGE_RATE_API_KEY', ''),
+    cacheTtlSeconds: int('EXCHANGE_RATE_CACHE_TTL_SECONDS', 60),
+  },
+  verification: {
+    // Onboarding links used to expire after 15 minutes. Merchants rarely see
+    // the email that quickly, so the default is now a full day.
+    tokenTtlHours: int('VERIFICATION_TOKEN_TTL_HOURS', 24),
+    resendCooldownSeconds: int('VERIFICATION_RESEND_COOLDOWN_SECONDS', 60),
+  },
+  outbox: {
+    // Transactional outbox: email rows are committed with the sale and sent
+    // asynchronously, so a retried transaction cannot send the mail twice.
+    pollIntervalMs: int('OUTBOX_POLL_INTERVAL_MS', 1_000),
+    maxAttempts: int('OUTBOX_MAX_ATTEMPTS', 5),
+    staleLockSeconds: int('OUTBOX_STALE_LOCK_SECONDS', 60),
+  },
   backup: {
     dir: str('BACKUP_DIR', './data/backups'),
     intervalHours: int('BACKUP_INTERVAL_HOURS', 0),
@@ -117,6 +139,15 @@ if (config.email.provider === 'resend' && !config.email.apiKey) {
 }
 if (config.store.taxRateBps < 0 || config.store.taxRateBps > 10_000) {
   throw new Error('TAX_RATE_BPS must be between 0 and 10000');
+}
+if (config.exchangeRate.cacheTtlSeconds <= 0) {
+  throw new Error('EXCHANGE_RATE_CACHE_TTL_SECONDS must be greater than 0');
+}
+if (config.verification.tokenTtlHours <= 0) {
+  throw new Error('VERIFICATION_TOKEN_TTL_HOURS must be greater than 0');
+}
+if (config.outbox.pollIntervalMs <= 0 || config.outbox.maxAttempts <= 0) {
+  throw new Error('OUTBOX_POLL_INTERVAL_MS and OUTBOX_MAX_ATTEMPTS must be greater than 0');
 }
 assertStellarNetworkSettings({
   network: config.stellar.network,

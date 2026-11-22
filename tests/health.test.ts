@@ -18,8 +18,8 @@ describe('GET /health', () => {
     const res = await api().get('/health').expect(200);
     expect(res.body).toMatchObject({
       status: 'OK',
-      database: 'up',
-      horizon: 'up',
+      database: { status: 'up' },
+      horizon: { status: 'up' },
       environment: 'test',
       stellarNetwork: 'testnet',
     });
@@ -28,13 +28,17 @@ describe('GET /health', () => {
 
   it('serves the same check at /healthz', async () => {
     const res = await api().get('/healthz').expect(200);
-    expect(res.body).toMatchObject({ status: 'OK', horizon: 'up' });
+    expect(res.body).toMatchObject({ status: 'OK', horizon: { status: 'up' } });
   });
 
   it('returns 503 DEGRADED when Horizon is unreachable, without echoing the error', async () => {
     probe.mockRejectedValue(new Error('getaddrinfo ENOTFOUND horizon.internal-secret.example'));
     const res = await api().get('/healthz').expect(503);
-    expect(res.body).toMatchObject({ status: 'DEGRADED', database: 'up', horizon: 'down' });
+    expect(res.body).toMatchObject({
+      status: 'DEGRADED',
+      database: { status: 'up' },
+      horizon: { status: 'down' },
+    });
     expect(JSON.stringify(res.body)).not.toContain('internal-secret');
   });
 
@@ -43,14 +47,18 @@ describe('GET /health', () => {
     err.name = 'TimeoutError';
     probe.mockRejectedValue(err);
     const res = await api().get('/health').expect(503);
-    expect(res.body).toMatchObject({ status: 'DEGRADED', horizon: 'timeout' });
+    expect(res.body).toMatchObject({ status: 'DEGRADED', horizon: { status: 'timeout' } });
   });
 
   it('returns 503 when the database probe fails', async () => {
     const spy = jest.spyOn(database, 'isDatabaseHealthy').mockReturnValue(false);
     try {
       const res = await api().get('/health').expect(503);
-      expect(res.body).toMatchObject({ status: 'DEGRADED', database: 'down', horizon: 'up' });
+      expect(res.body).toMatchObject({
+        status: 'DEGRADED',
+        database: { status: 'down' },
+        horizon: { status: 'up' },
+      });
     } finally {
       spy.mockRestore();
     }

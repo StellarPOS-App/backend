@@ -7,6 +7,7 @@ import { paginatedResponse, parsePagination, sendSuccess } from '@/utils/helpers
 import * as twoFactor from '@/controllers/twoFactor.controller';
 import { issueChallenge } from '@/controllers/twoFactor.controller';
 import { TwoFactorModel } from '@/models/twoFactor.model';
+import { sendVerificationEmail } from '@/services/verification.service';
 
 const SALT_ROUNDS = 10;
 
@@ -35,6 +36,10 @@ export async function register(req: Request, res: Response): Promise<void> {
     passwordHash: await bcrypt.hash(password, SALT_ROUNDS),
     role,
   });
+  // Merchant onboarding: the first account is the store owner. Queue a
+  // verification link (24h validity) via the outbox; it is delivered after the
+  // request commits, never inside a database transaction.
+  if (role === 'admin') sendVerificationEmail(user);
   sendSuccess(res, session(user), 201);
 }
 
@@ -135,8 +140,10 @@ export async function updateStaffRole(req: Request, res: Response): Promise<void
 export async function deactivateStaff(req: Request, res: Response): Promise<void> {
   const target = UserModel.findById(req.params.id);
   if (!target) throw notFound('User');
-  if (target.id === req.user!.sub) throw new AppError('You cannot deactivate your own account', 400);
-  if (target.role === 'admin') throw new AppError('Admin accounts cannot be deactivated this way', 403);
+  if (target.id === req.user!.sub)
+    throw new AppError('You cannot deactivate your own account', 400);
+  if (target.role === 'admin')
+    throw new AppError('Admin accounts cannot be deactivated this way', 403);
   UserModel.deactivate(target.id);
   sendSuccess(res, { id: target.id, deactivated: true });
 }

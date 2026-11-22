@@ -31,12 +31,17 @@ export async function getAccountBalances(publicKey: string): Promise<horizon.Bal
   if (!isValidPublicKey(publicKey)) throw new AppError('Invalid Stellar public key', 400);
   try {
     return await horizon.loadBalances(publicKey);
-  } catch (err: any) {
+  } catch (err: unknown) {
+    const detail = err as {
+      name?: string;
+      message?: string;
+      response?: { status?: number };
+    };
     if (
-      err?.name === 'NotFoundError' ||
-      err?.response?.status === 404 ||
-      err?.message?.includes('not found') ||
-      err?.message?.includes('Account not found')
+      detail?.name === 'NotFoundError' ||
+      detail?.response?.status === 404 ||
+      detail?.message?.includes('not found') ||
+      detail?.message?.includes('Account not found')
     ) {
       throw new AppError(
         'Destination Stellar account not found. Please activate it by funding with the minimum reserve (1 XLM).',

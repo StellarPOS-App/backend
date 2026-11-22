@@ -34,7 +34,8 @@ router.post(
     if (idempotencyKey) {
       const cached = idempotencyStore.get(idempotencyKey);
       if (cached && Date.now() - cached.timestamp < IDEMPOTENCY_TTL_MS) {
-        return sendSuccess(res, cached.result, 200);
+        sendSuccess(res, cached.result, 200);
+        return;
       }
     }
 
@@ -65,7 +66,7 @@ router.post(
   '/requests',
   validateBody(createRequestSchema),
   asyncHandler(async (req, res) => {
-    sendSuccess(res, checkout.createPaymentRequest(req.body.transactionId), 201);
+    sendSuccess(res, await checkout.createPaymentRequest(req.body.transactionId), 201);
   }),
 );
 

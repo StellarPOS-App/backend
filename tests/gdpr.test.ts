@@ -2,14 +2,7 @@ import { getDb } from '@/utils/database';
 import { verifyErasureReceipt, type ErasureReceipt } from '@/services/gdpr.service';
 import { UserModel } from '@/models/user.model';
 import { getQueue, setupQueues } from '@/utils/queue';
-import {
-  api,
-  bearer,
-  createProduct,
-  createSale,
-  signUp,
-  useDatabase,
-} from './helpers';
+import { api, bearer, createProduct, createSale, signUp, useDatabase } from './helpers';
 
 useDatabase();
 beforeAll(() => setupQueues());
@@ -131,10 +124,9 @@ describe('DELETE /api/v1/users/:id/data', () => {
       .expect(200);
     const receipt: ErasureReceipt = res.body.data;
 
-    const dropped = { ...receipt, records: { ...receipt.records, audit_log: [] as number[] } };
+    // `users` always contains the subject id; audit_log can legitimately be empty.
+    const dropped = { ...receipt, records: { ...receipt.records, users: [] as string[] } };
     expect(verifyErasureReceipt(dropped)).toBe(false);
-    expect(
-      verifyErasureReceipt({ ...receipt, timestamp: '2001-01-01T00:00:00.000Z' }),
-    ).toBe(false);
+    expect(verifyErasureReceipt({ ...receipt, timestamp: '2001-01-01T00:00:00.000Z' })).toBe(false);
   });
 });

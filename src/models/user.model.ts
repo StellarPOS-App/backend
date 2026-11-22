@@ -10,6 +10,8 @@ interface UserRow {
   email: string;
   password_hash: string;
   role: Role;
+  active?: number;
+  email_verified_at?: string | null;
   created_at: string;
 }
 
@@ -19,6 +21,8 @@ export interface User {
   email: string;
   passwordHash: string;
   role: Role;
+  active: boolean;
+  emailVerified: boolean;
   createdAt: string;
 }
 
@@ -30,6 +34,8 @@ const toUser = (r: UserRow): User => ({
   email: r.email,
   passwordHash: r.password_hash,
   role: r.role,
+  active: r.active !== 0,
+  emailVerified: Boolean(r.email_verified_at),
   createdAt: r.created_at,
 });
 
@@ -104,8 +110,12 @@ export const UserModel = {
    */
   anonymise(id: string, placeholderEmail: string, unusableHash: string): void {
     getDb()
-      .prepare("UPDATE users SET name = '[deleted user]', email = ?, password_hash = ? WHERE id = ?")
+      .prepare(
+        "UPDATE users SET name = '[deleted user]', email = ?, password_hash = ? WHERE id = ?",
+      )
       .run(placeholderEmail, unusableHash, id);
+  },
+
   /** Soft-deactivate: sets active = 0, preventing login (#148). */
   deactivate(id: string): void {
     getDb().prepare('UPDATE users SET active = 0 WHERE id = ?').run(id);
@@ -115,5 +125,14 @@ export const UserModel = {
     const row = getDb().prepare('SELECT active FROM users WHERE id = ?').get(id) as
       { active: number } | undefined;
     return row?.active === 1;
+  },
+
+  /** Marks a merchant's email as verified (idempotent). */
+  markEmailVerified(id: string): void {
+    getDb()
+      .prepare(
+        "UPDATE users SET email_verified_at = COALESCE(email_verified_at, datetime('now')) WHERE id = ?",
+      )
+      .run(id);
   },
 };

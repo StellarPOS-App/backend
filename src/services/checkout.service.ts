@@ -15,6 +15,8 @@ import type { IncomingPayment } from '@/services/horizon';
 import * as horizon from '@/services/horizon';
 import { summarize } from '@/services/analytics.service';
 import { emit } from '@/services/realtime';
+import { getAssetRate } from '@/services/exchangeRate.service';
+import { buildCheckoutMemo } from '@/utils/memo';
 import {
   buildPaymentUri,
   configuredAsset,
@@ -106,11 +108,13 @@ export function recordOfflinePayment(input: {
   return { payment, transaction: completeIfPaid(sale.id) };
 }
 
-function expectedFor(sale: Transaction, memo?: string): Expected {
+async function expectedFor(sale: Transaction, memo?: string): Promise<Expected> {
   return {
     destination: merchantAccount(),
     asset: configuredAsset(),
-    amount: centsToAssetAmount(sale.balanceCents, config.stellar.assetRate),
+    // The rate comes from the Redis-backed FX cache, not from a live API call
+    // on every conversion. See exchangeRate.service.ts.
+    amount: centsToAssetAmount(sale.balanceCents, await getAssetRate()),
     memo,
   };
 }
@@ -128,7 +132,7 @@ export async function recordStellarPayment(input: {
   if (PaymentModel.findByStellarHash(input.stellarTxHash)) {
     throw new AppError('This Stellar transaction has already been used for a payment', 409);
   }
-  const result = await verifyPayment(input.stellarTxHash, expectedFor(sale));
+  const result = await verifyPayment(input.stellarTxHash, await expectedFor(sale));
   if (!result.verified) {
     PaymentModel.create({
       transactionId: sale.id,
@@ -154,7 +158,7 @@ export async function recordStellarPayment(input: {
  * Opens a QR checkout for the sale's balance. Calling it again for the same
  * sale returns the open request instead of creating a second one.
  */
-export function createPaymentRequest(transactionId: string): PaymentRequest {
+export async function createPaymentRequest(transactionId: string): Promise<PaymentRequest> {
   const sale = pendingSale(transactionId);
   if (sale.balanceCents <= 0) throw badRequest('Nothing left to pay on this sale');
   const open = PaymentRequestModel.findOpenForTransaction(sale.id);
@@ -162,9 +166,15 @@ export function createPaymentRequest(transactionId: string): PaymentRequest {
 
   const destination = merchantAccount();
   const asset = configuredAsset();
-  const amount = centsToAssetAmount(sale.balanceCents, config.stellar.assetRate);
-  // Text memos are capped at 28 bytes; "SP" + 10 chars is unique enough and easy to read.
-  const memo = `SP${randomToken(10)}`;
+  const amount = centsToAssetAmount(sale.balanceCents, await getAssetRate());
+  // Keep the checkout unique AND readable: merchant name + total + reference
+  // in a MEMO_TEXT that never exceeds Stellar's 28-byte limit.
+  const memo = buildCheckoutMemo({
+    merchantName: config.store.name,
+    totalCents: sale.balanceCents,
+    reference: sale.reference,
+    unique: randomToken(4),
+  });
   const expiresAt = new Date(Date.now() + config.stellar.paymentTtlMinutes * 60_000).toISOString();
 
   return PaymentRequestModel.create({

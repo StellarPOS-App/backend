@@ -20,6 +20,7 @@ CREATE TABLE IF NOT EXISTS users (
   password_hash TEXT NOT NULL,
   role TEXT NOT NULL CHECK (role IN ('admin', 'manager', 'cashier')),
   active INTEGER NOT NULL DEFAULT 1,
+  email_verified_at TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -188,19 +189,56 @@ CREATE TABLE IF NOT EXISTS sessions (
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at);
+
+-- Transactional outbox. Email rows are inserted in the SAME database
+-- transaction as the business change they describe, then delivered by a
+-- separate worker after commit. The unique dedupe_key makes retries of a
+-- conflicting transaction idempotent: at most one row, so at most one send.
+CREATE TABLE IF NOT EXISTS outbox (
+  id TEXT PRIMARY KEY,
+  dedupe_key TEXT NOT NULL UNIQUE,
+  recipient TEXT NOT NULL,
+  subject TEXT NOT NULL,
+  payload TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'pending'
+    CHECK (status IN ('pending', 'processing', 'sent', 'failed')),
+  attempts INTEGER NOT NULL DEFAULT 0,
+  locked_at TEXT,
+  last_error TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  sent_at TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_outbox_status ON outbox(status, created_at);
+
+-- Email verification links for merchant onboarding. Only a hash of the token
+-- is stored; resending replaces the outstanding token and invalidates the old
+-- one, so old links in a mailbox can no longer be used.
+CREATE TABLE IF NOT EXISTS email_verifications (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  token_hash TEXT NOT NULL UNIQUE,
+  expires_at TEXT NOT NULL,
+  consumed_at TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_verifications_user ON email_verifications(user_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_verifications_expires ON email_verifications(expires_at);
 `;
 
 let sessionCleanupTimer: NodeJS.Timeout | null = null;
 
 export function startSessionCleanup(): void {
   // Clean up expired sessions every 15 minutes (#126)
-  sessionCleanupTimer = setInterval(() => {
-    try {
-      getDb().prepare("DELETE FROM sessions WHERE expires_at < datetime('now')").run();
-    } catch (err) {
-      logger.error('Session cleanup failed', err);
-    }
-  }, 15 * 60 * 1000);
+  sessionCleanupTimer = setInterval(
+    () => {
+      try {
+        getDb().prepare("DELETE FROM sessions WHERE expires_at < datetime('now')").run();
+      } catch (err) {
+        logger.error('Session cleanup failed', err);
+      }
+    },
+    15 * 60 * 1000,
+  );
   sessionCleanupTimer.unref();
 }
 
@@ -220,6 +258,9 @@ export async function connectDatabase(path: string = config.database.path): Prom
   }
   db.exec(SCHEMA);
   db.exec(SEARCH_SCHEMA);
+  // Existing databases predate these columns; the idempotent CREATE TABLE
+  // above does not add them, so migrate defensively before any query runs.
+  addColumnWithDefault('users', 'email_verified_at', 'TEXT');
   backfillSearchIndex(db);
   logger.debug(`Database ready at ${path}`);
   return db;
@@ -291,13 +332,14 @@ export function addColumnWithDefault(
   defaultValue?: string,
 ): void {
   const defaultClause = defaultValue !== undefined ? `DEFAULT ${defaultValue}` : "DEFAULT ''";
-  const def = typeDef.toUpperCase().includes('NOT NULL') && !typeDef.toUpperCase().includes('DEFAULT')
-    ? `${typeDef} ${defaultClause}`
-    : typeDef;
+  const def =
+    typeDef.toUpperCase().includes('NOT NULL') && !typeDef.toUpperCase().includes('DEFAULT')
+      ? `${typeDef} ${defaultClause}`
+      : typeDef;
   try {
     getDb().exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${def}`);
-  } catch (err: any) {
-    if (!err?.message?.includes('duplicate column name')) {
+  } catch (err: unknown) {
+    if (!(err as Error)?.message?.includes('duplicate column name')) {
       throw err;
     }
   }

@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import compression from 'compression';
 import cors from 'cors';
-import express from 'express';
+import express, { type Request } from 'express';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import { config } from '@/config/config';
@@ -27,6 +27,7 @@ import storeRoutes from '@/routes/store.routes';
 import transactionRoutes from '@/routes/transactions.routes';
 import transactionStreamRoutes from '@/routes/transactionStream.routes';
 import userRoutes from '@/routes/users.routes';
+import verificationRoutes from '@/routes/verification.routes';
 import docsRoutes from '@/routes/docs.routes';
 import { checkHealth } from '@/services/health.service';
 import { connections } from '@/services/realtime';
@@ -50,7 +51,7 @@ export function createApp(): express.Express {
     const reqId = (req.headers['x-request-id'] as string) || randomUUID();
     req.headers['x-request-id'] = reqId;
     res.setHeader('X-Request-ID', reqId);
-    (req as any).id = reqId;
+    (req as Request & { id: string }).id = reqId;
     next();
   });
 
@@ -130,7 +131,7 @@ export function createApp(): express.Express {
   );
 
   // Version unversioned /api/* routes as alias to /api/v1/* (#129)
-  app.use('/api', (req, res, next) => {
+  app.use('/api', (req, _res, next) => {
     if (!req.url.startsWith('/v1')) {
       req.url = `/v1${req.url}`;
     }
@@ -139,6 +140,7 @@ export function createApp(): express.Express {
 
   app.use('/api/v1', apiVersion('1'));
   app.use('/api/v1/auth', authRoutes);
+  app.use('/api/v1/verification', verificationRoutes);
   app.use('/api/v1/users', userRoutes);
   app.use('/api/v1/store', storeRoutes);
   app.use('/api/v1/products', productRoutes);

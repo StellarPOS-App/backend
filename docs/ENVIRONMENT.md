@@ -42,6 +42,19 @@ whole numbers, or the server refuses to start.
 | `EMAIL_API_KEY` | empty | Resend API key. Required when `EMAIL_PROVIDER=resend`. |
 | `EMAIL_FROM` | `StellarPOS <receipts@example.com>` | Sender address on receipts. Use an address on a domain you have verified with your provider. |
 
+## Exchange rates, verification and outbox
+
+| Variable | Default | Description |
+|---|---|---|
+| `EXCHANGE_RATE_API_URL` | empty | Optional FX provider for checkout conversions. Expects `{ "rates": { "USDC": 2.5 } }` (also accepts `{ USDC: 2.5 }` or `{ rate: 2.5 }`). Empty means `STELLAR_ASSET_RATE` is used. |
+| `EXCHANGE_RATE_API_KEY` | empty | Optional key appended as `access_key` query parameter. |
+| `EXCHANGE_RATE_CACHE_TTL_SECONDS` | `60` | Redis TTL for a fetched rate. Every conversion reads the cache first; concurrent misses coalesce into one API call. |
+| `VERIFICATION_TOKEN_TTL_HOURS` | `24` | Lifetime of a merchant onboarding verification link. Previously 15 minutes. |
+| `VERIFICATION_RESEND_COOLDOWN_SECONDS` | `60` | Minimum gap between calls to `POST /api/v1/verification/resend`. |
+| `OUTBOX_POLL_INTERVAL_MS` | `1000` | How often committed outbox rows are delivered. |
+| `OUTBOX_MAX_ATTEMPTS` | `5` | Delivery attempts before a message is marked failed. |
+| `OUTBOX_STALE_LOCK_SECONDS` | `60` | Age after which a `processing` row is reclaimed (crashed worker recovery). |
+
 ## Store
 
 | Variable | Default | Description |
@@ -60,7 +73,7 @@ whole numbers, or the server refuses to start.
 | `STELLAR_MERCHANT_PUBLIC_KEY` | empty | Public key (`G...`) that receives customer payments. Stellar checkout is disabled while it is empty. Never put a secret key (`S...`) here. The backend only watches this account and never signs for it. |
 | `STELLAR_ASSET_CODE` | `XLM` | Asset customers pay in, for example `USDC`. |
 | `STELLAR_ASSET_ISSUER` | empty | Issuer public key of the asset. Leave it empty for native `XLM`. Payments must match both code and issuer. |
-| `STELLAR_ASSET_RATE` | `1` | Store-currency units per one unit of the asset. Use `1` for USDC priced in USD. |
+| `STELLAR_ASSET_RATE` | `1` | Store-currency units per one unit of the asset. Use `1` for USDC priced in USD. Fallback when no FX provider is configured or the provider fails; successful lookups are cached in Redis for 60 seconds. |
 | `STELLAR_PAYMENT_TTL_MINUTES` | `15` | Minutes before an unpaid QR checkout expires. Its sale is voided and its stock released. |
 | `STELLAR_WATCHER_ENABLED` | `true`, or `false` when `NODE_ENV=test` | Polls Horizon for incoming payments and settles matching checkouts. |
 | `STELLAR_WATCHER_INTERVAL_MS` | `5000` | Milliseconds between watcher polls. |

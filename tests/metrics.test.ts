@@ -1,6 +1,6 @@
 import { config } from '@/config/config';
 import { getQueue, setupQueues } from '@/utils/queue';
-import { api, bearer, createProduct, signUp, useDatabase } from './helpers';
+import { api, createProduct, signUp, useDatabase } from './helpers';
 
 useDatabase();
 beforeAll(() => setupQueues());

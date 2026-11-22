@@ -1,6 +1,8 @@
 import type { DatabaseSync } from 'node:sqlite';
 import { config } from '@/config/config';
 import { AppError, badRequest } from '@/middleware/error.middleware';
+import { enqueueOutboxEmailTx } from '@/services/outbox.service';
+import { orderConfirmationEmail } from '@/services/receipt.service';
 import { getDb, withTransaction } from '@/utils/database';
 import { newId, type Pagination } from '@/utils/helpers';
 import { taxCents } from '@/utils/money';
@@ -201,13 +203,14 @@ export const TransactionModel = {
       const total = subtotal - discount + tax;
 
       const saleId = newId();
+      const reference = nextReference(db);
       db.prepare(
         `INSERT INTO transactions
            (id, reference, user_id, customer_id, subtotal_cents, discount_cents, tax_cents, total_cents, status, note)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)`,
       ).run(
         saleId,
-        nextReference(db),
+        reference,
         input.userId,
         input.customerId ?? null,
         subtotal,
@@ -232,6 +235,31 @@ export const TransactionModel = {
           l.quantity,
           l.line_total_cents,
         );
+      }
+
+      // The confirmation is recorded, not sent, while the transaction is
+      // open. The outbox worker delivers it after commit. A retried create
+      // (e.g. after a stock conflict) reuses the same dedupe key, so at most
+      // one email can ever be delivered for this sale.
+      if (input.customerId) {
+        const customer = db
+          .prepare('SELECT email FROM customers WHERE id = ?')
+          .get(input.customerId) as { email: string | null } | undefined;
+        if (customer?.email) {
+          enqueueOutboxEmailTx(
+            db,
+            orderConfirmationEmail(
+              customer.email,
+              { reference, totalCents: total },
+              lines.map((l) => ({
+                name: l.name,
+                quantity: l.quantity,
+                lineTotalCents: l.line_total_cents,
+              })),
+            ),
+            `order-confirmation:${saleId}`,
+          );
+        }
       }
       return saleId;
     });

@@ -35,7 +35,10 @@ router.get(
       .prepare('SELECT stellar_public_key FROM user_stellar WHERE user_id = ?')
       .get(req.user!.sub) as { stellar_public_key: string } | undefined;
 
-    if (!row) return sendSuccess(res, { linked: false, publicKey: null, balances: [] });
+    if (!row) {
+      sendSuccess(res, { linked: false, publicKey: null, balances: [] });
+      return;
+    }
 
     const balances = await getAccountBalances(row.stellar_public_key).catch(() => []);
     sendSuccess(res, { linked: true, publicKey: row.stellar_public_key, balances });
@@ -62,9 +65,7 @@ router.post(
 router.delete(
   '/account/link',
   asyncHandler(async (req, res) => {
-    const result = getDb()
-      .prepare('DELETE FROM user_stellar WHERE user_id = ?')
-      .run(req.user!.sub);
+    const result = getDb().prepare('DELETE FROM user_stellar WHERE user_id = ?').run(req.user!.sub);
     if (result.changes === 0) throw new AppError('No Stellar account linked', 404);
     sendSuccess(res, { linked: false });
   }),
