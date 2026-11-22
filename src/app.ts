@@ -12,7 +12,10 @@ import { responseTime } from '@/middleware/responseTime.middleware';
 import { notFoundHandler } from '@/middleware/notFound.middleware';
 import { DEFAULT_ROLE_LIMITS, roleRateLimit } from '@/middleware/rateLimit.middleware';
 import analyticsRoutes from '@/routes/analytics.routes';
+import reportRoutes from '@/routes/reports.routes';
 import merchantRoutes from '@/routes/merchant.routes';
+import orderRoutes from '@/routes/orders.routes';
+import withdrawalRoutes from '@/routes/withdrawals.routes';
 import auditRoutes from '@/routes/audit.routes';
 import authRoutes from '@/routes/auth.routes';
 import customerRoutes from '@/routes/customers.routes';
@@ -61,7 +64,7 @@ export function createApp(): express.Express {
       origin: config.client.url,
       credentials: true,
       methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-      allowedHeaders: ['Content-Type', 'Authorization'],
+      allowedHeaders: ['Content-Type', 'Authorization', 'Idempotency-Key', 'X-Request-ID'],
     }),
   );
   app.use(metricsMiddleware);
@@ -98,6 +101,22 @@ export function createApp(): express.Express {
     );
   }
 
+  // CDN redirect for static documentation and image assets (#160).
+  // In production, set CDN_URL to your CDN origin (e.g. https://cdn.example.com).
+  // The server 302-redirects /docs/* and /static/* to the CDN so Node.js does
+  // not spend CPU streaming bytes that a CDN can serve at the edge.
+  if (config.cdn.url) {
+    app.use(['/docs', '/static'], (req, res) => {
+      res.redirect(302, `${config.cdn.url}${req.path}`);
+    });
+  }
+
+  app.get('/health', (_req, res) => {
+    const database = isDatabaseHealthy() ? 'up' : 'down';
+    // Load balancers take a 503 as "send traffic elsewhere".
+    res.status(database === 'up' ? 200 : 503).json({
+      status: database === 'up' ? 'OK' : 'DEGRADED',
+      database,
   // Liveness and readiness in one probe: 200 when the database and Horizon both
   // answer, 503 otherwise. /healthz is the Kubernetes-style alias of /health.
   // Probe failure details are logged, never returned.
@@ -148,6 +167,7 @@ export function createApp(): express.Express {
   app.use('/api/v1/transactions', transactionRoutes);
   app.use('/api/v1/payments', paymentRoutes);
   app.use('/api/v1/analytics', analyticsRoutes);
+  app.use('/api/v1/reports', reportRoutes);
   app.use('/api/v1/search', searchRoutes);
   app.use('/api/v1/webhooks', webhookRoutes);
   app.use('/api/v1/audit', auditRoutes);
@@ -155,6 +175,8 @@ export function createApp(): express.Express {
   app.use('/api/v1/stellar', stellarRoutes);
   app.use('/api/v1/transactions', transactionStreamRoutes);
   app.use('/api/v1/merchant', merchantRoutes);
+  app.use('/api/v1/orders', orderRoutes);
+  app.use('/api/v1/withdrawals', withdrawalRoutes);
   app.use('/api/v1/queues', queueRoutes);
   app.use('/api/docs', docsRoutes);
   app.use(unsupportedApiVersion(['1']));

@@ -62,12 +62,29 @@ export function attachRealtime(server: HttpServer): Server {
     socket.on('data', onData);
     socket.on('message', onData);
 
-    socket.on('disconnect', () => {
+    // A terminal can disappear without sending a close frame (power loss,
+    // dropped Wi-Fi, killed process). Socket.IO normally turns that into a
+    // `disconnect`, but the underlying Engine.IO/WebSocket transport can emit
+    // `close` or `error` on its own. Clean up on every path; the guard makes
+    // the work idempotent so overlapping events cannot double-remove entries.
+    let cleaned = false;
+    const cleanup = () => {
+      if (cleaned) return;
+      cleaned = true;
       socket.off('data', onData);
       socket.off('message', onData);
+      socket.off('disconnect', cleanup);
+      socket.off('error', cleanup);
+      socket.conn.off('close', cleanup);
+      socket.conn.off('error', cleanup);
       if (expiry) clearTimeout(expiry);
       connections.remove(userId, socket);
-    });
+    };
+    socket.on('disconnect', cleanup);
+    socket.on('error', cleanup);
+    socket.conn.on('close', cleanup);
+    socket.conn.on('error', cleanup);
+
     logger.debug(`Terminal connected: ${socket.data.user.email}`);
   });
   return io;

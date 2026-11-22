@@ -17,9 +17,18 @@ export interface Summary {
   customers: number;
 }
 
-/** Sales summary for the last `days` days (1 = today, UTC). */
+/** Sales summary for the last `days` days (1 = today, UTC).
+ *
+ * All reads run inside a `BEGIN DEFERRED` transaction (#158). In WAL mode a
+ * deferred transaction acquires only a shared lock and never blocks concurrent
+ * writes — unlike `BEGIN EXCLUSIVE` / `SELECT … FOR UPDATE`, which would stall
+ * new transactions during report generation.
+ */
 export function summarize(days = 1): Summary {
   const db = getDb();
+  // Open a read-only snapshot so the four queries below see a consistent state
+  // without holding a write lock that would block concurrent POS transactions.
+  db.exec('BEGIN DEFERRED');
   const since = `datetime('now', 'start of day', '-${days - 1} days')`;
   const totals = db
     .prepare(
@@ -53,6 +62,7 @@ export function summarize(days = 1): Summary {
     )
     .get() as { refunds: number; voids: number; lowStock: number; customers: number };
 
+  db.exec('COMMIT');
   return {
     days,
     totalSales: totals.sales,

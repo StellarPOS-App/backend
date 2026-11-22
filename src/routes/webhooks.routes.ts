@@ -71,6 +71,7 @@ router.get(
   asyncHandler(async (req, res) => {
     const page = parsePagination(req.query, 200);
     const clauses: string[] = [];
+    const params: (string | number)[] = [];
     const params: string[] = [];
 
     if (req.query.event) {

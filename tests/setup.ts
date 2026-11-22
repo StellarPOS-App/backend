@@ -18,4 +18,10 @@ import { connectRedis, getRedis } from '@/utils/redis';
 beforeAll(async () => {
   await connectRedis();
   await getRedis().flushAll();
+  closeDatabase();
+  await connectDatabase(':memory:');
+});
+
+afterAll(() => {
+  closeDatabase();
 });

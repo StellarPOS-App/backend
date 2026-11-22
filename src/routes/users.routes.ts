@@ -2,10 +2,11 @@ import { Router, type NextFunction, type Request, type Response } from 'express'
 import * as auth from '@/controllers/auth.controller';
 import * as gdpr from '@/controllers/gdpr.controller';
 import { authenticate, authorize } from '@/middleware/auth.middleware';
-import { AppError } from '@/middleware/error.middleware';
+import { AppError, notFound } from '@/middleware/error.middleware';
 import { validateBody } from '@/middleware/validate.middleware';
-import { asyncHandler } from '@/utils/helpers';
-import { createStaffSchema, updateRoleSchema } from '@/validation/auth.validation';
+import { UserModel } from '@/models/user.model';
+import { asyncHandler, sendSuccess } from '@/utils/helpers';
+import { createStaffSchema, updateKycSchema, updateRoleSchema } from '@/validation/auth.validation';
 
 const router = Router();
 router.use(authenticate);
@@ -26,6 +27,19 @@ router.patch(
   adminOnly,
   validateBody(updateRoleSchema),
   asyncHandler(auth.updateStaffRole),
+);
+
+/** Compliance decision. Only admins may record a KYC outcome. */
+router.patch(
+  '/:id/kyc',
+  adminOnly,
+  validateBody(updateKycSchema),
+  asyncHandler(async (req, res) => {
+    const user = UserModel.findById(req.params.id);
+    if (!user) throw notFound('User');
+    UserModel.updateKycStatus(user.id, req.body.status);
+    sendSuccess(res, UserModel.findById(user.id));
+  }),
 );
 
 // GDPR erasure (issue #213). Returns a receipt with a digest over the affected record ids.

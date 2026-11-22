@@ -30,6 +30,39 @@ const openApiSpec = {
         responses: { 201: { description: 'Payment recorded' } },
       },
     },
+    '/api/v1/orders': {
+      post: {
+        summary: 'Create an order (deduplicated with Idempotency-Key for 24h)',
+        parameters: [
+          {
+            name: 'Idempotency-Key',
+            in: 'header',
+            required: false,
+            schema: { type: 'string', maxLength: 255 },
+          },
+        ],
+        responses: {
+          201: { description: 'Order created' },
+          200: { description: 'Replayed order' },
+        },
+      },
+    },
+    '/api/v1/withdrawals': {
+      post: {
+        summary: 'Initiate a Stellar withdrawal (requires approved KYC)',
+        responses: {
+          201: { description: 'Withdrawal queued' },
+          403: { description: 'KYC not approved' },
+        },
+      },
+      get: { summary: 'List withdrawals (requires approved KYC)' },
+    },
+    '/api/v1/users/{id}/kyc': {
+      patch: {
+        summary: 'Admin: record a merchant KYC decision',
+        responses: { 200: { description: 'KYC status updated' } },
+      },
+    },
     '/api/v1/products': {
       get: {
         summary: 'List products',

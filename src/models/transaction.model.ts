@@ -287,6 +287,8 @@ export const TransactionModel = {
       search?: string;
     },
     page: Pagination,
+    /** Keyset cursor, applied *after* every filter condition. */
+    cursor?: { createdAt: string; id: string },
   ): { items: Transaction[]; total: number } {
     const clauses: string[] = [];
     const params: string[] = [];
@@ -317,6 +319,22 @@ export const TransactionModel = {
         n: number;
       }
     ).n;
+
+    if (cursor) {
+      // The cursor predicate is appended to the *same* clause list as the
+      // filters, so filtered results are still keyset-paginated. Fetching
+      // limit+1 rows tells the caller whether another page exists.
+      clauses.push('(t.created_at < ? OR (t.created_at = ? AND t.reference < ?))');
+      params.push(cursor.createdAt, cursor.createdAt, cursor.id);
+      const rows = (db
+        .prepare(
+          `${SELECT} WHERE ${clauses.join(' AND ')}
+           ORDER BY t.created_at DESC, t.reference DESC LIMIT ?`,
+        )
+        .all(...params, page.limit + 1) ?? []) as unknown as TransactionRow[];
+      return { items: rows.map(toTransaction), total: total ?? 0 };
+    }
+
     const rows = (db
       .prepare(`${SELECT} ${where} ORDER BY t.created_at DESC, t.reference DESC LIMIT ? OFFSET ?`)
       .all(...params, page.limit, page.offset) ?? []) as unknown as TransactionRow[];

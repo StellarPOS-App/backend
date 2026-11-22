@@ -86,6 +86,12 @@ export const PaymentRequestModel = {
     return row && toRequest(row);
   },
 
+  findByMemo(memo: string): PaymentRequest | undefined {
+    const row = getDb().prepare('SELECT * FROM payment_requests WHERE memo = ?').get(memo) as
+      RequestRow | undefined;
+    return row && toRequest(row);
+  },
+
   findPendingByMemo(memo: string): PaymentRequest | undefined {
     const row = getDb()
       .prepare("SELECT * FROM payment_requests WHERE memo = ? AND status = 'pending'")

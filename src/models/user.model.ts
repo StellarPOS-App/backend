@@ -4,6 +4,10 @@ import { newId } from '@/utils/helpers';
 export const ROLES = ['admin', 'manager', 'cashier'] as const;
 export type Role = (typeof ROLES)[number];
 
+/** Compliance gate for money-out (withdrawal) endpoints. */
+export const KYC_STATUSES = ['pending', 'approved', 'rejected'] as const;
+export type KycStatus = (typeof KYC_STATUSES)[number];
+
 interface UserRow {
   id: string;
   name: string;
@@ -12,6 +16,8 @@ interface UserRow {
   role: Role;
   active?: number;
   email_verified_at?: string | null;
+  kyc_status: KycStatus;
+  active: number;
   created_at: string;
 }
 
@@ -23,6 +29,9 @@ export interface User {
   role: Role;
   active: boolean;
   emailVerified: boolean;
+  active: number;
+  kycStatus: KycStatus;
+  active: boolean;
   createdAt: string;
 }
 
@@ -36,6 +45,9 @@ const toUser = (r: UserRow): User => ({
   role: r.role,
   active: r.active !== 0,
   emailVerified: Boolean(r.email_verified_at),
+  active: r.active,
+  kycStatus: r.kyc_status ?? 'pending',
+  active: r.active !== 0,
   createdAt: r.created_at,
 });
 
@@ -90,6 +102,17 @@ export const UserModel = {
 
   updateRole(id: string, role: Role): void {
     getDb().prepare('UPDATE users SET role = ? WHERE id = ?').run(role, id);
+  },
+
+  /** Compliance decision recorded by an admin. Read fresh on every withdrawal request. */
+  updateKycStatus(id: string, status: KycStatus): void {
+    getDb().prepare('UPDATE users SET kyc_status = ? WHERE id = ?').run(status, id);
+  },
+
+  kycStatus(id: string): KycStatus | undefined {
+    const row = getDb().prepare('SELECT kyc_status FROM users WHERE id = ?').get(id) as
+      { kyc_status: KycStatus } | undefined;
+    return row?.kyc_status;
   },
 
   updateProfile(id: string, fields: { name?: string; passwordHash?: string }): void {

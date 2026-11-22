@@ -1,13 +1,22 @@
 import { Router } from 'express';
 import { authenticate, authorize } from '@/middleware/auth.middleware';
 import { AppError, badRequest, notFound } from '@/middleware/error.middleware';
+import { idempotency } from '@/middleware/idempotency.middleware';
 import { CustomerModel } from '@/models/customer.model';
 import { queueEmail } from '@/services/email.service';
 import { receiptEmail } from '@/services/receipt.service';
 import { validateBody } from '@/middleware/validate.middleware';
 import { PaymentModel } from '@/models/payment.model';
 import { TransactionModel, type TransactionStatus } from '@/models/transaction.model';
-import { asyncHandler, paginatedResponse, parsePagination, sendSuccess } from '@/utils/helpers';
+import {
+  asyncHandler,
+  cursorPaginatedResponse,
+  decodeCursor,
+  encodeCursor,
+  paginatedResponse,
+  parsePagination,
+  sendSuccess,
+} from '@/utils/helpers';
 import {
   createSaleSchema,
   emailReceiptSchema,
@@ -23,6 +32,7 @@ router.get(
   '/',
   asyncHandler(async (req, res) => {
     const page = parsePagination(req.query);
+    const cursor = decodeCursor(req.query.cursor ? String(req.query.cursor) : undefined);
     const status = STATUSES.find((s) => s === req.query.status);
     const { items, total } = TransactionModel.list(
       {
@@ -33,8 +43,20 @@ router.get(
         search: req.query.search ? String(req.query.search) : undefined,
       },
       page,
+      cursor,
     );
-    paginatedResponse(res, items, total, page);
+    // Keyset pagination takes precedence over page/offset when a cursor is
+    // supplied, but the requested page is still echoed in the response.
+    if (cursor) {
+      cursorPaginatedResponse(res, items, page.limit, page.page);
+      return;
+    }
+    const hasMore = page.offset + items.length < total;
+    const last = items.at(-1);
+    paginatedResponse(res, items, total, page, {
+      hasMore,
+      nextCursor: hasMore && last ? encodeCursor(last) : null,
+    });
   }),
 );
 
@@ -54,6 +76,7 @@ router.get(
 router.post(
   '/',
   validateBody(createSaleSchema),
+  idempotency(),
   asyncHandler(async (req, res) => {
     const sale = TransactionModel.createSale({ ...req.body, userId: req.user!.sub });
     sendSuccess(res, { ...sale, items: TransactionModel.findItemsByTransactionId(sale.id) }, 201);

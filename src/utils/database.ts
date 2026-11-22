@@ -21,6 +21,8 @@ CREATE TABLE IF NOT EXISTS users (
   role TEXT NOT NULL CHECK (role IN ('admin', 'manager', 'cashier')),
   active INTEGER NOT NULL DEFAULT 1,
   email_verified_at TEXT,
+  -- Compliance gate: withdrawals are blocked unless this is 'approved'.
+  kyc_status TEXT NOT NULL DEFAULT 'pending' CHECK (kyc_status IN ('pending', 'approved', 'rejected')),
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -63,10 +65,17 @@ CREATE TABLE IF NOT EXISTS transactions (
   completed_at TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_transactions_created ON transactions(created_at);
+-- Streaming CSV exports page by (created_at, id) keyset cursors.
+CREATE INDEX IF NOT EXISTS idx_transactions_created_id ON transactions(created_at DESC, id DESC);
 CREATE INDEX IF NOT EXISTS idx_transactions_status ON transactions(status);
 -- Analytics filter completed sales by date; customer pages list a customer's sales.
 CREATE INDEX IF NOT EXISTS idx_transactions_status_created ON transactions(status, created_at);
 CREATE INDEX IF NOT EXISTS idx_transactions_customer ON transactions(customer_id, created_at);
+-- Partial index for non-terminal statuses (#157). Dashboard and background jobs
+-- that poll for pending orders only ever scan this small working set; a full-status
+-- index includes every historical completed/voided row unnecessarily.
+CREATE INDEX IF NOT EXISTS idx_transactions_pending ON transactions(created_at)
+  WHERE status = 'pending';
 -- Merchant (user) dashboard filters by user_id; composite with created_at covers date-range queries.
 CREATE INDEX IF NOT EXISTS idx_transactions_user ON transactions(user_id, created_at);
 -- PERF-016: dashboard and reporting queries filter by merchant (user_id), status, and date range
@@ -99,6 +108,7 @@ CREATE TABLE IF NOT EXISTS payments (
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_payments_tx ON payments(transaction_id);
+CREATE INDEX IF NOT EXISTS idx_payments_created_id ON payments(created_at DESC, id DESC);
 
 CREATE TABLE IF NOT EXISTS payment_requests (
   id TEXT PRIMARY KEY,
@@ -223,6 +233,35 @@ CREATE TABLE IF NOT EXISTS email_verifications (
 );
 CREATE INDEX IF NOT EXISTS idx_verifications_user ON email_verifications(user_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_verifications_expires ON email_verifications(expires_at);
+-- Idempotency keys for mutating endpoints. The response is stored so a retry
+-- after a client timeout replays the original result instead of creating a
+-- second order. Keys are scoped per user + route (scope) and expire after 24h.
+CREATE TABLE IF NOT EXISTS idempotency_keys (
+  scope TEXT NOT NULL,
+  key TEXT NOT NULL,
+  request_hash TEXT NOT NULL,
+  status INTEGER NOT NULL,
+  body TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  expires_at TEXT NOT NULL,
+  PRIMARY KEY (scope, key)
+);
+CREATE INDEX IF NOT EXISTS idx_idempotency_expires ON idempotency_keys(expires_at);
+
+-- Stellar withdrawals (money out). Gated by the KYC middleware in app.ts.
+CREATE TABLE IF NOT EXISTS withdrawals (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(id),
+  destination TEXT NOT NULL,
+  asset_code TEXT NOT NULL,
+  asset_issuer TEXT,
+  amount TEXT NOT NULL,
+  memo TEXT NOT NULL DEFAULT '',
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'completed', 'failed', 'cancelled')),
+  tx_hash TEXT UNIQUE,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_withdrawals_user ON withdrawals(user_id, created_at);
 `;
 
 let sessionCleanupTimer: NodeJS.Timeout | null = null;
@@ -257,6 +296,8 @@ export async function connectDatabase(path: string = config.database.path): Prom
     db.exec('PRAGMA synchronous = NORMAL;');
   }
   db.exec(SCHEMA);
+  // Older databases predate the KYC gate; add the column idempotently (#compliance).
+  addColumnWithDefault('users', 'kyc_status', 'TEXT NOT NULL', "'pending'");
   db.exec(SEARCH_SCHEMA);
   // Existing databases predate these columns; the idempotent CREATE TABLE
   // above does not add them, so migrate defensively before any query runs.

@@ -2,12 +2,13 @@ import type { NextFunction, Request, Response } from 'express';
 import jwt from 'jsonwebtoken';
 import { config } from '@/config/config';
 import { AppError } from '@/middleware/error.middleware';
-import { UserModel, type Role } from '@/models/user.model';
+import { UserModel, type KycStatus, type Role } from '@/models/user.model';
 
 export interface AuthPayload {
   sub: string;
   email: string;
   role: Role;
+  kycStatus: KycStatus;
 }
 
 declare global {
@@ -19,7 +20,10 @@ declare global {
   }
 }
 
-export function signToken(payload: AuthPayload): string {
+/** Callers may omit kycStatus (older sessions); it defaults to 'pending'. */
+export type TokenPayload = Omit<AuthPayload, 'kycStatus'> & { kycStatus?: KycStatus };
+
+export function signToken(payload: TokenPayload): string {
   return jwt.sign(payload, config.jwt.secret, {
     expiresIn: config.jwt.expiresIn as jwt.SignOptions['expiresIn'],
   });
@@ -30,7 +34,12 @@ export function verifyToken(token: string): AuthPayload {
   if (typeof decoded === 'string' || !decoded.sub || !decoded.role) {
     throw new AppError('Invalid token', 401);
   }
-  return { sub: decoded.sub, email: decoded.email, role: decoded.role };
+  return {
+    sub: decoded.sub,
+    email: decoded.email,
+    role: decoded.role,
+    kycStatus: (decoded.kycStatus as KycStatus) ?? 'pending',
+  };
 }
 
 export function authenticate(req: Request, _res: Response, next: NextFunction): void {
@@ -45,7 +54,12 @@ export function authenticate(req: Request, _res: Response, next: NextFunction): 
     if (!user || !user.active) {
       return next(new AppError('User not found or inactive', 401));
     }
-    req.user = { sub: user.id, email: user.email, role: user.role };
+    req.user = {
+      sub: user.id,
+      email: user.email,
+      role: user.role,
+      kycStatus: user.kycStatus,
+    };
     next();
   } catch {
     next(new AppError('Invalid or expired token', 401));

@@ -3,6 +3,7 @@ import { config } from '@/config/config';
 import { AppError } from '@/middleware/error.middleware';
 import * as horizon from '@/services/horizon';
 import { toStroops } from '@/utils/money';
+import { validateStellarMemo } from '@/utils/stellarMemo';
 
 export interface StellarAssetRef {
   code: string;
@@ -64,6 +65,9 @@ export function buildPaymentUri(input: {
   memo: string;
   message?: string;
 }): string {
+  // Validate before the URI (and the wallet's transaction envelope) is built:
+  // an oversized MEMO_TEXT is otherwise rejected by Stellar with a cryptic error.
+  validateStellarMemo(input.memo, 'Stellar text memo');
   const params = new URLSearchParams({ destination: input.destination, amount: input.amount });
   if (!isNative(input.asset)) {
     params.set('asset_code', input.asset.code);

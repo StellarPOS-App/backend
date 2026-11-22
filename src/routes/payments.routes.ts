@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { authenticate } from '@/middleware/auth.middleware';
 import { notFound } from '@/middleware/error.middleware';
+import { idempotency } from '@/middleware/idempotency.middleware';
 import { validateBody } from '@/middleware/validate.middleware';
 import { PaymentModel } from '@/models/payment.model';
 import { PaymentRequestModel } from '@/models/paymentRequest.model';
@@ -15,9 +16,6 @@ import {
 const router = Router();
 router.use(authenticate);
 
-const idempotencyStore = new Map<string, { result: unknown; timestamp: number }>();
-const IDEMPOTENCY_TTL_MS = 24 * 60 * 60 * 1000;
-
 router.get(
   '/transaction/:transactionId',
   asyncHandler(async (req, res) => {
@@ -29,6 +27,7 @@ router.get(
 router.post(
   '/',
   validateBody(createPaymentSchema),
+  idempotency(),
   asyncHandler(async (req, res) => {
     const idempotencyKey = req.headers['idempotency-key'] as string | undefined;
     if (idempotencyKey) {
@@ -57,6 +56,7 @@ router.post(
     if (idempotencyKey) {
       idempotencyStore.set(idempotencyKey, { result, timestamp: Date.now() });
     }
+    return sendSuccess(res, result, 201);
     sendSuccess(res, result, 201);
   }),
 );
@@ -67,6 +67,11 @@ router.post(
   validateBody(createRequestSchema),
   asyncHandler(async (req, res) => {
     sendSuccess(res, await checkout.createPaymentRequest(req.body.transactionId), 201);
+    sendSuccess(
+      res,
+      checkout.createPaymentRequest(req.body.transactionId, req.body.memo as string | undefined),
+      201,
+    );
   }),
 );
 

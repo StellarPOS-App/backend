@@ -18,7 +18,11 @@ function formatDatesToIso(obj: unknown): unknown {
     const out: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(obj)) {
       if (
-        (k.endsWith('At') || k.endsWith('Date') || k === 'created_at' || k === 'updated_at' || k === 'completed_at') &&
+        (k.endsWith('At') ||
+          k.endsWith('Date') ||
+          k === 'created_at' ||
+          k === 'updated_at' ||
+          k === 'completed_at') &&
         typeof v === 'number'
       ) {
         out[k] = new Date(v > 1_000_000_000_000 ? v : v * 1000).toISOString();
@@ -57,36 +61,46 @@ export function paginatedResponse<T>(
   items: T[],
   total: number,
   { page, limit }: Pagination,
+  /** Optional keyset metadata so clients can switch to cursor pagination. */
+  extra: { nextCursor?: string | null; hasMore?: boolean } = {},
 ): Response {
   return res.json({
     success: true,
     data: items,
-    pagination: { page, limit, total, pages: Math.max(1, Math.ceil(total / limit)) },
+    pagination: { page, limit, total, pages: Math.max(1, Math.ceil(total / limit)), ...extra },
   });
 }
 
-/** Cursor-based pagination using created_at + id (#130). */
-export function encodeCursor(item: { createdAt?: string; created_at?: string; id: string }): string {
+/** Cursor-based pagination using created_at + a stable tie-breaker (#130). */
+export function encodeCursor(item: {
+  createdAt?: string;
+  created_at?: string;
+  id: string;
+  /** Used as tie-breaker when the ordering is by reference (transactions). */
+  reference?: string;
+}): string {
   const ts = item.createdAt ?? item.created_at ?? '';
-  return Buffer.from(`${ts}:${item.id}`).toString('base64');
+  const tieBreaker = item.reference ?? item.id;
+  return Buffer.from(`${ts}:${tieBreaker}`).toString('base64');
 }
 
 export function decodeCursor(cursorStr?: string): { createdAt: string; id: string } | undefined {
   if (!cursorStr) return undefined;
   try {
-    const [createdAt, id] = Buffer.from(cursorStr, 'base64').toString('utf8').split(':');
-    if (!createdAt || !id) return undefined;
-    return { createdAt, id };
+    const raw = Buffer.from(cursorStr, 'base64').toString('utf8');
+    // SQLite datetime strings contain ':' (HH:MM:SS), so split on the *last*
+    // separator instead of the first one.
+    const separator = raw.lastIndexOf(':');
+    if (separator <= 0 || separator === raw.length - 1) return undefined;
+    return { createdAt: raw.slice(0, separator), id: raw.slice(separator + 1) };
   } catch {
     return undefined;
   }
 }
 
-export function cursorPaginatedResponse<T extends { id: string; createdAt?: string; created_at?: string }>(
-  res: Response,
-  items: T[],
-  limit: number,
-): Response {
+export function cursorPaginatedResponse<
+  T extends { id: string; createdAt?: string; created_at?: string },
+>(res: Response, items: T[], limit: number, page = 1): Response {
   const hasNext = items.length > limit;
   const sliced = hasNext ? items.slice(0, limit) : items;
   const nextCursor = hasNext && sliced.length > 0 ? encodeCursor(sliced[sliced.length - 1]) : null;
@@ -94,6 +108,7 @@ export function cursorPaginatedResponse<T extends { id: string; createdAt?: stri
     success: true,
     data: sliced,
     pagination: {
+      page,
       limit,
       nextCursor,
       hasMore: hasNext,

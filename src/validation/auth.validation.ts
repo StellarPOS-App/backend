@@ -1,5 +1,5 @@
 import Joi from 'joi';
-import { ROLES } from '@/models/user.model';
+import { KYC_STATUSES, ROLES } from '@/models/user.model';
 
 const password = Joi.string().min(8).max(128);
 
@@ -23,6 +23,12 @@ export const createStaffSchema = registerSchema.keys({
 export const updateRoleSchema = Joi.object({
   role: Joi.string()
     .valid(...ROLES)
+    .required(),
+});
+
+export const updateKycSchema = Joi.object({
+  status: Joi.string()
+    .valid(...KYC_STATUSES)
     .required(),
 });
 

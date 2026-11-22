@@ -17,8 +17,7 @@ payment lands on-chain.
 
 ## Highlights
 
-- **Pay by QR, settled by the chain.** `POST /payments/requests` returns a
-  [SEP-0007](https://github.com/stellar/stellar-protocol/blob/master/ecosystem/sep-0007.md)
+- **Pay by QR, settled by the chain.** `POST /payments/requests` returns a [SEP-0007](https://github.com/stellar/stellar-protocol/blob/master/ecosystem/sep-0007.md)
   `web+stellar:pay` URI with a unique memo. A background watcher follows the
   merchant account on Horizon, matches the memo, checks the asset and amount,
   and completes the sale. Every terminal hears about it over Socket.IO.

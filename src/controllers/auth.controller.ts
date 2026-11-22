@@ -18,7 +18,12 @@ const publicUser = (user: User) => ({
 
 const session = (user: User) => ({
   user: publicUser(user),
-  token: signToken({ sub: user.id, email: user.email, role: user.role }),
+  token: signToken({
+    sub: user.id,
+    email: user.email,
+    role: user.role,
+    kycStatus: user.kycStatus,
+  }),
 });
 
 /**

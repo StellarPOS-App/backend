@@ -1,5 +1,6 @@
 import Joi from 'joi';
 import { PAYMENT_METHODS } from '@/models/payment.model';
+import { stellarTextMemo } from '@/validation/stellar.validation';
 
 const txHash = Joi.string()
   .trim()
@@ -23,6 +24,8 @@ export const createPaymentSchema = Joi.object({
 
 export const createRequestSchema = Joi.object({
   transactionId: Joi.string().uuid().required(),
+  // Optional merchant-supplied text memo, capped at Stellar's 28-byte limit.
+  memo: stellarTextMemo,
 });
 
 export const verifyRequestSchema = Joi.object({

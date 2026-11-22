@@ -91,6 +91,20 @@ export const config = {
     name: str('STORE_NAME', 'StellarPOS Store'),
     currency: str('STORE_CURRENCY', 'USD').toUpperCase(),
     taxRateBps: int('TAX_RATE_BPS', 0),
+    // Processing fee in basis points (250 = 2.5%). Always applied with
+    // integer arithmetic in stroops/cents — never through a JS float.
+    feeRateBps: int('FEE_RATE_BPS', 0),
+  },
+  // Static asset CDN (#160). When set, the server redirects /docs/* and
+  // /static/* requests to CDN_URL instead of serving them from Node.js.
+  // Leave empty in development to serve files locally.
+  cdn: {
+    url: str('CDN_URL', ''),
+  },
+  // Redis URL for session / cache store (#159). Required in production when
+  // horizontal scaling is needed; unused in single-node development/test.
+  redis: {
+    url: str('REDIS_URL', ''),
   },
   stellar: {
     network,
@@ -148,6 +162,8 @@ if (config.verification.tokenTtlHours <= 0) {
 }
 if (config.outbox.pollIntervalMs <= 0 || config.outbox.maxAttempts <= 0) {
   throw new Error('OUTBOX_POLL_INTERVAL_MS and OUTBOX_MAX_ATTEMPTS must be greater than 0');
+if (config.store.feeRateBps < 0 || config.store.feeRateBps > 10_000) {
+  throw new Error('FEE_RATE_BPS must be between 0 and 10000');
 }
 assertStellarNetworkSettings({
   network: config.stellar.network,

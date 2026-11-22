@@ -41,7 +41,7 @@ router.get(
     }
 
     const balances = await getAccountBalances(row.stellar_public_key).catch(() => []);
-    sendSuccess(res, { linked: true, publicKey: row.stellar_public_key, balances });
+    return sendSuccess(res, { linked: true, publicKey: row.stellar_public_key, balances });
   }),
 );
 
