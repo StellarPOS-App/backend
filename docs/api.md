@@ -93,6 +93,19 @@ Limits are raised to 10,000 per minute (general) and 1,000 per 15 minutes
 | POST | `/users` | admin | `{ name, email, password, role }` |
 | PATCH | `/users/:id/role` | admin | `{ role }`. Admins cannot change their own role. |
 
+### Merchant email verification
+
+The first account (the merchant) receives a verification link on registration. Links are valid for **24 hours**. Only the newest link is usable: requesting a new one invalidates older links.
+
+| Method | Path | Role | Body / notes |
+|---|---|---|---|
+| POST | `/verification/send` | any | Issues a fresh link and queues the email. Returns `{ sent: true, expiresAt }` (202). No cooldown. |
+| POST | `/verification/resend` | any | Same, but refuses a second request within `VERIFICATION_RESEND_COOLDOWN_SECONDS` (429). |
+| POST | `/verification/confirm` | public | `{ token }` from the email link. Returns `{ verified: true, email }`; the token can be used once. |
+| GET | `/verification/status` | any | `{ verified: boolean }` for the signed-in user. |
+
+Order confirmations are written to a transactional outbox when a sale with a customer email is created, then delivered asynchronously; the outbox dedupe key guarantees one email per sale even if the sale transaction is retried.
+
 ## Store
 
 | Method | Path | Role | Notes |

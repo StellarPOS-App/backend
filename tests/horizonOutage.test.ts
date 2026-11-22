@@ -54,8 +54,7 @@ const tx = (hash: string, memo: string | null): horizon.TransactionInfo => ({
 const storedCursor = (): string | undefined =>
   (
     getDb().prepare("SELECT value FROM kv WHERE key = 'horizon_payments_cursor'").get() as
-      | { value: string }
-      | undefined
+      { value: string } | undefined
   )?.value;
 
 let token: string;
@@ -91,7 +90,8 @@ describe('watcher under Horizon outage', () => {
     await pollOnce(MERCHANT);
     expect(storedCursor()).toBe('500');
 
-    mocked.fetchPaymentsSince.mockRejectedValueOnce(outage());
+    // pollOnce retries three times; keep the outage in place for every retry.
+    mocked.fetchPaymentsSince.mockRejectedValue(outage());
     await expect(pollOnce(MERCHANT)).rejects.toThrow('ECONNREFUSED');
     expect(storedCursor()).toBe('500');
   });
@@ -137,7 +137,8 @@ describe('watcher under Horizon outage', () => {
     await expect(handleIncomingPayment(payment(hash))).rejects.toThrow('ECONNREFUSED');
     const req = await api().get(`/api/v1/payments/requests/${requestId}`).set(bearer(token));
     expect(req.body.data.status).toBe('pending');
-    expect(memo).toMatch(/^SP/);
+    expect(Buffer.byteLength(memo, 'utf8')).toBeLessThanOrEqual(28);
+    expect(memo).toContain('12.50');
   });
 
   it('treats a transaction Horizon cannot find as not settling anything', async () => {

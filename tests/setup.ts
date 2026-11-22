@@ -10,13 +10,14 @@ process.env.STELLAR_ASSET_RATE = '1';
 process.env.STELLAR_WATCHER_ENABLED = 'false';
 process.env.TAX_RATE_BPS = '0';
 
-// Reset the database connection between every test suite so that state
-// accumulated in one suite (rows, schema mutations) cannot bleed into the
-// next.  Each test file gets a fresh in-memory SQLite database via
-// connectDatabase(), which re-runs all migrations from scratch (#196).
-import { connectDatabase, closeDatabase } from '@/utils/database';
+// The database is owned by each suite via useDatabase() (or its own beforeAll
+// for file-backed tests). Only the shared Redis cache is reset per suite, so
+// a rate cached by one file cannot hide an API call another file expects.
+import { connectRedis, getRedis } from '@/utils/redis';
 
 beforeAll(async () => {
+  await connectRedis();
+  await getRedis().flushAll();
   closeDatabase();
   await connectDatabase(':memory:');
 });

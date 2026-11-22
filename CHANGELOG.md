@@ -7,6 +7,10 @@ All notable changes to this project are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- Redis-backed exchange-rate cache (60-second TTL, single-flight fetches) for all Stellar checkout conversions, with a configured-rate fallback.
+- Transactional outbox for order confirmations: the email row commits with the sale and is delivered asynchronously, exactly once per sale.
+- Merchant email verification endpoints (`/api/v1/verification/send`, `/resend`, `/confirm`, `/status`) with a 24-hour link lifetime and resend cooldown.
+- Human-readable Stellar memos containing merchant name and order total within the 28-byte `MEMO_TEXT` limit.
 - Dead-letter queue inspection and requeue: failed jobs keep id, payload, error, stack and timestamp; admin endpoints `GET /api/v1/queues/dead-letters` and `POST /api/v1/queues/dead-letters/:id/requeue` (#211).
 - API versioning policy (`docs/versioning.md`), an `X-API-Version` header on `/api/v1` responses, and a 404 listing supported versions for unknown `/api/v<N>` paths (#212).
 - `webhookReplayGuard` middleware (signed timestamp window plus short-lived replay store) and `docs/webhooks.md` for future webhook routes (#209).

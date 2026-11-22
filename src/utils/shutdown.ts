@@ -87,15 +87,13 @@ export function createShutdown(options: ShutdownOptions): (signal: string) => Pr
 function drainHttp(server: ShutdownServer, timeoutMs: number): Promise<boolean> {
   return new Promise((resolve) => {
     let settled = false;
-    let timer: NodeJS.Timeout | undefined;
-    const finish = (clean: boolean) => {
+    function finish(clean: boolean): void {
       if (settled) return;
       settled = true;
       if (timer) clearTimeout(timer);
       resolve(clean);
-    };
-
-    timer = setTimeout(() => {
+    }
+    const timer = setTimeout(() => {
       server.closeAllConnections();
       finish(false);
     }, timeoutMs);

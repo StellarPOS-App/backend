@@ -7,6 +7,7 @@ import { paginatedResponse, parsePagination, sendSuccess } from '@/utils/helpers
 import * as twoFactor from '@/controllers/twoFactor.controller';
 import { issueChallenge } from '@/controllers/twoFactor.controller';
 import { TwoFactorModel } from '@/models/twoFactor.model';
+import { sendVerificationEmail } from '@/services/verification.service';
 
 const SALT_ROUNDS = 10;
 
@@ -40,6 +41,10 @@ export async function register(req: Request, res: Response): Promise<void> {
     passwordHash: await bcrypt.hash(password, SALT_ROUNDS),
     role,
   });
+  // Merchant onboarding: the first account is the store owner. Queue a
+  // verification link (24h validity) via the outbox; it is delivered after the
+  // request commits, never inside a database transaction.
+  if (role === 'admin') sendVerificationEmail(user);
   sendSuccess(res, session(user), 201);
 }
 

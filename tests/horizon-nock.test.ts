@@ -6,6 +6,7 @@
  * tests run offline and deterministically.
  */
 
+import { get } from 'node:https';
 import nock from 'nock';
 import {
   mockHorizonPayments,
@@ -52,13 +53,31 @@ function txRecord(overrides: Partial<MockTransaction> = {}): MockTransaction {
   };
 }
 
+/** nock 13 intercepts node:http(s); undici's fetch is not interceptable there. */
+function getJson(url: string): Promise<{ ok: boolean; json: () => Promise<unknown> }> {
+  return new Promise((resolve, reject) => {
+    get(url, (res) => {
+      const chunks: Buffer[] = [];
+      res.on('data', (chunk) => chunks.push(Buffer.from(chunk)));
+      res.on('end', () => {
+        const text = Buffer.concat(chunks).toString('utf8');
+        const status = res.statusCode ?? 200;
+        resolve({
+          ok: status >= 200 && status < 300,
+          json: async () => JSON.parse(text) as unknown,
+        });
+      });
+    }).on('error', reject);
+  });
+}
+
 describe('[TEST-008] nock Horizon mock helpers', () => {
   it('mockHorizonPayments intercepts the payments endpoint', async () => {
     const scope = mockHorizonPayments(MERCHANT, [paymentRecord()]);
 
     // Use node's built-in fetch (Node 18+) or a simple http.get to verify interception.
     const url = `${HORIZON_BASE}/accounts/${MERCHANT}/payments?limit=200&order=asc&cursor=0`;
-    const res = await fetch(url);
+    const res = await getJson(url);
     const body = (await res.json()) as { _embedded: { records: MockPayment[] } };
 
     expect(res.ok).toBe(true);
@@ -72,7 +91,7 @@ describe('[TEST-008] nock Horizon mock helpers', () => {
     const scope = mockHorizonTransaction(tx);
 
     const url = `${HORIZON_BASE}/transactions/${tx.hash}`;
-    const res = await fetch(url);
+    const res = await getJson(url);
     const body = (await res.json()) as MockTransaction;
 
     expect(res.ok).toBe(true);
@@ -102,7 +121,7 @@ describe('[TEST-008] nock Horizon mock helpers', () => {
     mockHorizonTransaction(tx);
 
     const url = `${HORIZON_BASE}/transactions/${tx.hash}`;
-    const res = await fetch(url);
+    const res = await getJson(url);
     const body = (await res.json()) as MockTransaction;
 
     expect(body.successful).toBe(false);

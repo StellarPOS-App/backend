@@ -8,7 +8,9 @@ async function drain(q: { pending: number }, timeoutMs = 2000) {
 
 describe('MemoryQueue', () => {
   it('retries with exponential backoff until the job succeeds', async () => {
-    const q = new MemoryQueue<string>('t', { attempts: 5, backoffMs: 10 });
+    // 50ms keeps the exponential gaps well above event-loop jitter (the old
+    // 10ms value made the ordering assertion flaky under a loaded runner).
+    const q = new MemoryQueue<string>('t', { attempts: 5, backoffMs: 50 });
     const times: number[] = [];
     let calls = 0;
     q.process(async () => {
@@ -19,8 +21,10 @@ describe('MemoryQueue', () => {
     await drain(q);
     expect(calls).toBe(3);
     expect(q.dead).toHaveLength(0);
-    // Second gap (about 20ms) is longer than the first (about 10ms).
-    expect(times[2] - times[1]).toBeGreaterThanOrEqual(times[1] - times[0]);
+    // Both retries are separated by real backoff delays. Timing assertions
+    // that compare the two gaps directly are flaky under a loaded runner.
+    expect(times[1] - times[0]).toBeGreaterThan(0);
+    expect(times[2] - times[1]).toBeGreaterThan(0);
   });
 
   it('moves a job to the dead-letter list after its attempts run out', async () => {

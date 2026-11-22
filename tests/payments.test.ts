@@ -197,7 +197,10 @@ describe('QR checkout (SEP-0007 payment requests)', () => {
       destination: MERCHANT,
       status: 'pending',
     });
-    expect(req.memo).toMatch(/^SP[A-Z2-9]{10}$/);
+    // Memo now carries a human-readable summary within Stellar's 28-byte cap.
+    expect(Buffer.byteLength(req.memo, 'utf8')).toBeLessThanOrEqual(28);
+    expect(req.memo).toContain('12.50');
+    expect(req.memo).toContain('STELLARPOS');
 
     const uri = new URL(req.uri.replace('web+stellar:', 'https://x/'));
     expect(uri.searchParams.get('destination')).toBe(MERCHANT);

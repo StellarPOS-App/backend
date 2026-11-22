@@ -29,6 +29,15 @@ router.post(
   validateBody(createPaymentSchema),
   idempotency(),
   asyncHandler(async (req, res) => {
+    const idempotencyKey = req.headers['idempotency-key'] as string | undefined;
+    if (idempotencyKey) {
+      const cached = idempotencyStore.get(idempotencyKey);
+      if (cached && Date.now() - cached.timestamp < IDEMPOTENCY_TTL_MS) {
+        sendSuccess(res, cached.result, 200);
+        return;
+      }
+    }
+
     const body = req.body as {
       transactionId: string;
       method: 'cash' | 'card' | 'stellar';
@@ -57,6 +66,7 @@ router.post(
   '/requests',
   validateBody(createRequestSchema),
   asyncHandler(async (req, res) => {
+    sendSuccess(res, await checkout.createPaymentRequest(req.body.transactionId), 201);
     sendSuccess(
       res,
       checkout.createPaymentRequest(req.body.transactionId, req.body.memo as string | undefined),

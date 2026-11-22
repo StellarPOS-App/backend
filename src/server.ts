@@ -11,6 +11,7 @@ import { connectRedis } from '@/utils/redis';
 import { closeQueues, flushQueues, setupQueues } from '@/utils/queue';
 import { createShutdown } from '@/utils/shutdown';
 import { startEmailWorker } from '@/services/email.service';
+import { flushOutbox, startOutboxWorker, stopOutboxWorker } from '@/services/outbox.service';
 import { startSettlementSchedule, stopSettlementSchedule } from '@/services/settlement.service';
 
 export { app };
@@ -18,13 +19,12 @@ export { app };
 export const server = createServer(app);
 
 async function start(): Promise<void> {
-  logger.info(
-    `Stellar network: ${config.stellar.network} (Horizon ${config.stellar.horizonUrl})`,
-  );
+  logger.info(`Stellar network: ${config.stellar.network} (Horizon ${config.stellar.horizonUrl})`);
   await connectDatabase();
   await connectRedis();
   setupQueues();
   startEmailWorker();
+  startOutboxWorker();
   startPaymentConfirmationWorker();
   attachRealtime(server);
   startPaymentWatcher();
@@ -44,8 +44,13 @@ const shutdown = createShutdown({
     stopPaymentWatcher();
     stopBackupSchedule();
     stopSettlementSchedule();
+    stopOutboxWorker();
   },
-  flushJobs: (timeoutMs) => flushQueues(timeoutMs),
+  flushJobs: async (timeoutMs) => {
+    const queueRemaining = await flushQueues(timeoutMs);
+    await flushOutbox(timeoutMs);
+    return queueRemaining;
+  },
   release: async () => {
     await closeRealtime();
     closeQueues();
